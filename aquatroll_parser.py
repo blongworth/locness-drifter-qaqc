@@ -131,9 +131,9 @@ def parse_aquatroll_folder(folder_path: str | Path) -> pd.DataFrame:
     # Combine all data
     combined_df = pd.concat(all_data, ignore_index=True)
 
-    # Convert datetime column to UTC if it exists
-    if "datetime" in combined_df.columns:
-        combined_df["datetime"] = pd.to_datetime(combined_df["datetime"], utc=True)
+    # Convert timestamp column to UTC if it exists
+    if "timestamp" in combined_df.columns:
+        combined_df["timestamp"] = pd.to_datetime(combined_df["timestamp"], utc=True)
 
     logger.info(
         f"Combined data from {len(all_data)} files: {len(combined_df)} total records"
@@ -294,7 +294,7 @@ def _parse_sensor_data(table) -> tuple[pd.DataFrame, dict[str, dict[str, str]]]:
     clean_columns = {}
     for col in df.columns:
         if col == "Date Time":
-            clean_columns[col] = "datetime"
+            clean_columns[col] = "timestamp"
         else:
             # Extract parameter name and units
             # e.g., "Actual Conductivity (µS/cm) (577714)" -> "actual_conductivity"
@@ -306,8 +306,8 @@ def _parse_sensor_data(table) -> tuple[pd.DataFrame, dict[str, dict[str, str]]]:
 
     # Convert data types
     for col in df.columns:
-        if col == "datetime":
-            # Convert datetime column
+        if col == "timestamp":
+            # Convert timestamp column
             df[col] = pd.to_datetime(df[col])
         else:
             # Try to convert to numeric
@@ -342,11 +342,11 @@ def get_aquatroll_summary(file_path: str | Path) -> dict[str, Any]:
             "device_model": metadata.get("device_model", "Unknown"),
             "device_sn": metadata.get("device_serial_number", "Unknown"),
             "log_name": metadata.get("log_name", "Unknown"),
-            "start_time": data_df["datetime"].min()
-            if "datetime" in data_df.columns
+            "start_time": data_df["timestamp"].min()
+            if "timestamp" in data_df.columns
             else None,
-            "end_time": data_df["datetime"].max()
-            if "datetime" in data_df.columns
+            "end_time": data_df["timestamp"].max()
+            if "timestamp" in data_df.columns
             else None,
             "num_records": len(data_df),
             "parameters": list(data_df.columns),
@@ -404,7 +404,7 @@ if __name__ == "__main__":
                 df = add_drifter_number(df, "data/drifter_metadata.csv")
                 print(f"Parsed {len(df)} total records from folder")
                 print(f"Columns: {list(df.columns)}")
-                print(f"Date range: {df['datetime'].min()} to {df['datetime'].max()}")
+                print(f"Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
                 df.to_csv("combined_aquatroll_data.csv", index=False)
                 print("Combined data written to combined_aquatroll_data.csv")
                 df.to_parquet("combined_aquatroll_data.parquet", index=False)

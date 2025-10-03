@@ -75,7 +75,7 @@ def parse_gpx_to_dataframe(filename: str | Path) -> pd.DataFrame:
 
         logger.info(f"Successfully parsed {len(df)} points from {file_path}")
         # Extract drifter number from asset_id (final integer in the string)
-        df["drifter_number"] = (
+        df["drifter"] = (
             df["asset_id"]
             .str.extract(r"(\d+)$", expand=False)
             .astype(float)
