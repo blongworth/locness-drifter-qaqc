@@ -1,0 +1,14 @@
+[project]
+name = "locness-drifter-qaqc"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "bs4>=0.0.2",
+    "gpxpy>=1.6.2",
+    "pandas>=2.3.3",
+    "prefect>=3.4.21",
+    "pyarrow>=21.0.0",
+    "scipy>=1.16.2",
+]

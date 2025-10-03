@@ -1,0 +1,1 @@
+# drifterdata package initialization
