@@ -375,14 +375,14 @@ def add_drifter_number(df: pd.DataFrame, metadata_file: str | Path) -> pd.DataFr
         raise ValueError("DataFrame must contain a 'device_sn' column")
 
     # Load metadata mapping
-    metadata = pd.read_csv(metadata_file, dtype=str)
+    metadata = pd.read_csv(metadata_file)
     
     # filter for aquatroll devices only
     metadata = metadata[metadata["device_type"].str.lower() == "aquatroll"]
 
     # select relevant columns
     metadata = metadata[["device_sn", "drifter"]].drop_duplicates()
-
+    metadata["drifter"] = metadata["drifter"].astype("Int8")
     # Merge with metadata to get drifter numbers
     df = df.merge(metadata[["device_sn", "drifter"]], on="device_sn", how="left")
 

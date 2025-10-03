@@ -68,6 +68,10 @@ def parse_gpx_to_dataframe(filename: str | Path) -> pd.DataFrame:
 
         # Create DataFrame
         df = pd.DataFrame(data)
+        
+        # Ensure timestamp is a timezone-aware datetime in UTC
+        if "timestamp" in df.columns:
+            df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
 
         # Sort by timestamp if we have timestamp data
         if "timestamp" in df.columns and not df["timestamp"].isna().all():
@@ -79,7 +83,7 @@ def parse_gpx_to_dataframe(filename: str | Path) -> pd.DataFrame:
             df["asset_id"]
             .str.extract(r"(\d+)$", expand=False)
             .astype(float)
-            .astype("Int64")
+            .astype("Int8")
         )
 
         return df

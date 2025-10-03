@@ -360,6 +360,7 @@ def add_drifter_number(df: pd.DataFrame, metadata_file: str | Path) -> pd.DataFr
 
     # select relevant columns
     metadata = metadata[["device_sn", "drifter", "sensor_position"]].drop_duplicates()
+    metadata["drifter"] = metadata["drifter"].astype("Int8")
 
     # Merge with metadata to get drifter numbers
     df = df.merge(metadata, left_on="serial_number", right_on="device_sn", how="left")
