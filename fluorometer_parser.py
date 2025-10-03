@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 def parse_fluorometer_folder(folder_path: str | Path) -> pd.DataFrame:
     """
-    Parse all fluorometer data files in a folder and return concatenated DataFrame.
+    Parse all fluorometer data files in a folder recursively and return a concatenated DataFrame.
 
     Args:
         folder_path: Path to the folder containing fluorometer data files
@@ -43,36 +43,29 @@ def parse_fluorometer_folder(folder_path: str | Path) -> pd.DataFrame:
     if not folder_path.is_dir():
         raise ValueError(f"Path is not a directory: {folder_path}")
 
-    logger.info(f"Parsing fluorometer data files in: {folder_path}")
+    logger.info(f"Recursively parsing fluorometer data files in: {folder_path}")
 
     all_data = []
     files_processed = 0
 
-    # Find all text files in the folder
-    for file_path in folder_path.glob("*.txt"):
+    # Recursively find all files in the folder
+    for file_path in folder_path.rglob("*"):
+        if not file_path.is_file():
+            continue
+
         try:
+            # Attempt to parse the file
             data = parse_fluorometer_file(file_path)
             if not data.empty:
                 all_data.append(data)
                 files_processed += 1
                 logger.debug(f"Processed {file_path.name}: {len(data)} records")
+        except ValueError as e:
+            # Log expected parsing errors at a debug level as many files might not be valid
+            logger.debug(f"Skipped non-fluorometer file {file_path.name}: {e}")
         except Exception as e:
+            # Log other unexpected errors as warnings
             logger.warning(f"Failed to parse {file_path.name}: {e}")
-            continue
-
-    # Also try files without extension or with .dat extension
-    for pattern in ["*", "*.dat"]:
-        for file_path in folder_path.glob(pattern):
-            if file_path.is_file() and file_path.suffix not in [".txt"]:
-                try:
-                    data = parse_fluorometer_file(file_path)
-                    if not data.empty:
-                        all_data.append(data)
-                        files_processed += 1
-                        logger.debug(f"Processed {file_path.name}: {len(data)} records")
-                except Exception as e:
-                    logger.debug(f"Skipped {file_path.name}: {e}")
-                    continue
 
     if not all_data:
         raise ValueError(f"No valid fluorometer data files found in {folder_path}")
@@ -308,11 +301,11 @@ def get_fluorometer_summary(folder_path: str | Path) -> dict[str, Any]:
         }
 
         # Time range information
-        if "time_sec" in df.columns:
+        if "timestamp" in df.columns:
             summary["time_range"] = {
-                "start_timestamp": df["time_sec"].min(),
-                "end_timestamp": df["time_sec"].max(),
-                "duration_seconds": df["time_sec"].max() - df["time_sec"].min(),
+                "start_timestamp": df["timestamp"].min(),
+                "end_timestamp": df["timestamp"].max(),
+                "duration_seconds": df["timestamp"].max() - df["timestamp"].min(),
             }
 
             if "timestamp" in df.columns:
@@ -345,6 +338,33 @@ def get_fluorometer_summary(folder_path: str | Path) -> dict[str, Any]:
         logger.error(f"Error getting fluorometer summary for {folder_path}: {e}")
         raise
 
+def add_drifter_number(df: pd.DataFrame, metadata_file: str | Path) -> pd.DataFrame:
+    """
+    Add a 'drifter_number' column to the DataFrame by joining on a metadata table.
+
+    Args:
+        df: pandas DataFrame with an 'serial_number' column
+        metadata_file: Path to CSV file containing pme sn to 'drifter' mappings
+
+    Returns:
+        DataFrame with an additional 'drifter' column
+    """
+    if "serial_number" not in df.columns:
+        raise ValueError("DataFrame must contain a 'serial_number' column")
+
+    # Load metadata mapping
+    metadata = pd.read_csv(metadata_file, dtype=str)
+    
+    # filter for pme devices only
+    metadata = metadata[metadata["device_type"].str.lower() == "pme"]
+
+    # select relevant columns
+    metadata = metadata[["device_sn", "drifter", "sensor_position"]].drop_duplicates()
+
+    # Merge with metadata to get drifter numbers
+    df = df.merge(metadata, left_on="serial_number", right_on="device_sn", how="left")
+
+    return df
 
 if __name__ == "__main__":
     # Example usage
@@ -356,6 +376,7 @@ if __name__ == "__main__":
 
     try:
         df = parse_fluorometer_folder(sys.argv[1])
+        df = add_drifter_number(df, "data/drifter_metadata.csv")
         print(f"Parsed {len(df)} records from fluorometer data files:")
         print(df.head())
         print("\nDataFrame info:")
@@ -373,6 +394,10 @@ if __name__ == "__main__":
                 f"Time range: {summary['time_range'].get('start_timestamp')} to {summary['time_range'].get('end_timestamp')}"
             )
 
+        df.to_csv("combined_fluorometer_data.csv", index=False)
+        print("Combined data written to combined_fluorometer_data.csv")
+        df.to_parquet("combined_fluorometer_data.parquet", index=False)
+        print("Combined data written to combined_fluorometer_data.parquet")
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)

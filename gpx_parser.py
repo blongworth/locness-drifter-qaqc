@@ -74,6 +74,14 @@ def parse_gpx_to_dataframe(filename: str | Path) -> pd.DataFrame:
             df = df.sort_values("timestamp").reset_index(drop=True)
 
         logger.info(f"Successfully parsed {len(df)} points from {file_path}")
+        # Extract drifter number from asset_id (final integer in the string)
+        df["drifter_number"] = (
+            df["asset_id"]
+            .str.extract(r"(\d+)$", expand=False)
+            .astype(float)
+            .astype("Int64")
+        )
+
         return df
 
     except gpxpy.gpx.GPXXMLSyntaxException as e:
@@ -158,6 +166,11 @@ if __name__ == "__main__":
         print("\nGPX Summary:")
         print(f"Total tracks: {summary['total_tracks']}")
         print(f"Total points: {summary['total_points']}")
+        
+        df.to_csv("parsed_gpx_data.csv", index=False)
+        print("Parsed data written to parsed_gpx_data.csv")
+        df.to_parquet("parsed_gpx_data.parquet", index=False)
+        print("Parsed data written to parsed_gpx_data.parquet")
 
     except Exception as e:
         print(f"Error: {e}")

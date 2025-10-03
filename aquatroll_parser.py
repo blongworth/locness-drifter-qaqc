@@ -360,6 +360,33 @@ def get_aquatroll_summary(file_path: str | Path) -> dict[str, Any]:
         logger.error(f"Error getting summary for {file_path}: {e}")
         return {"filename": Path(file_path).name, "error": str(e)}
 
+def add_drifter_number(df: pd.DataFrame, metadata_file: str | Path) -> pd.DataFrame:
+    """
+    Add a 'drifter_number' column to the DataFrame by joining on a metadata table.
+
+    Args:
+        df: pandas DataFrame with an 'asset_id' column
+        metadata_file: Path to CSV file containing aquatroll sn to 'drifter_number' mappings
+
+    Returns:
+        DataFrame with an additional 'drifter' column
+    """
+    if "device_sn" not in df.columns:
+        raise ValueError("DataFrame must contain a 'device_sn' column")
+
+    # Load metadata mapping
+    metadata = pd.read_csv(metadata_file, dtype=str)
+    
+    # filter for aquatroll devices only
+    metadata = metadata[metadata["device_type"].str.lower() == "aquatroll"]
+
+    # select relevant columns
+    metadata = metadata[["device_sn", "drifter"]].drop_duplicates()
+
+    # Merge with metadata to get drifter numbers
+    df = df.merge(metadata[["device_sn", "drifter"]], on="device_sn", how="left")
+
+    return df
 
 if __name__ == "__main__":
     # Setup logging for standalone execution
@@ -374,9 +401,14 @@ if __name__ == "__main__":
             if Path(file_path).is_dir():
                 # Parse folder
                 df = parse_aquatroll_folder(file_path)
+                df = add_drifter_number(df, "data/drifter_metadata.csv")
                 print(f"Parsed {len(df)} total records from folder")
                 print(f"Columns: {list(df.columns)}")
                 print(f"Date range: {df['datetime'].min()} to {df['datetime'].max()}")
+                df.to_csv("combined_aquatroll_data.csv", index=False)
+                print("Combined data written to combined_aquatroll_data.csv")
+                df.to_parquet("combined_aquatroll_data.parquet", index=False)
+                print("Combined data written to combined_aquatroll_data.parquet")
             else:
                 # Parse single file
                 result = parse_aquatroll_file(file_path)
