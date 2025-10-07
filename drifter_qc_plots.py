@@ -17,7 +17,9 @@ def _():
 @app.cell
 def _(pl):
     # Load the data using polars
-    df = pl.read_parquet("loc02_drifter_combined.parquet")
+    df = pl.read_parquet("output/loc02_drifter_combined.parquet")
+    
+    #.filter(pl.col("drifter").is_not_null())
     df
     return (df,)
 
@@ -34,33 +36,6 @@ def _(df, px):
         lon="longitude",
         color="drifter",
         title="Drifter Positions",
-        mapbox_style="open-street-map",
-        zoom=10,
-        height=600,
-        labels={"sensor_rwt_ppb": "RWT (ppb)"},
-    )
-
-    _fig
-    return
-
-
-@app.cell
-def _(df, pl):
-    # Filter for the specific drifter
-    drifter_5_df = df.filter(pl.col("drifter") == 5)
-    return (drifter_5_df,)
-
-
-@app.cell
-def _(drifter_5_df, px):
-    # Create a scatter mapbox plot
-    # Note: plotly.express works seamlessly with pandas, so we convert the polars DataFrame
-    _fig = px.scatter_mapbox(
-        drifter_5_df.to_pandas(),
-        lat="latitude",
-        lon="longitude",
-        color="sensor_ppb_rwt",
-        title="Drifter 5 Position Colored by Sensor RWT (ppb)",
         mapbox_style="open-street-map",
         zoom=10,
         height=600,

@@ -9,24 +9,30 @@ troll_file = "output/loc02_drifter_aquatroll.parquet"
 # Read and sort the dataframes
 # Sorting is required for asof joins
 gpx_df = pl.read_parquet(gpx_file).sort("drifter", "timestamp")
-fluoro_df = pl.read_parquet(fluoro_file).sort("drifter", "sensor_position", "timestamp")
+fluoro_df = pl.read_parquet(fluoro_file).sort("drifter", "sensor_position", "timestamp").filter(pl.col("drifter").is_not_null())
 troll_df = pl.read_parquet(troll_file).sort("drifter", "timestamp")
 
 # Get unique combinations of drifter and sensor_position
 unique_sensors = fluoro_df.select("drifter", "sensor_position").unique()
 
 # Cross join GPS data with unique sensor combinations to create all combinations
-gpx_expanded = gpx_df.join(unique_sensors, on="drifter", how="inner")
-
-print(fluoro_df.columns)
+gpx_expanded = gpx_df.join(unique_sensors, on="drifter", how="inner").sort("drifter", "sensor_position", "timestamp")
 
 # Now join with fluorometer data using asof join
-combined_df = gpx_expanded.sort("drifter", "sensor_position", "timestamp").join_asof(
+combined_df = gpx_expanded.join_asof(
     fluoro_df, 
     on="timestamp", 
     by=["drifter", "sensor_position"], 
     tolerance="60s"
 )
+
+# Use this join to ensure all fluorometer records are kept, even if no GPS match is found
+# combined_df = fluoro_df.join_asof(
+#     gpx_expanded, 
+#     on="timestamp", 
+#     by=["drifter", "sensor_position"], 
+#     tolerance="60s"
+# )
 
 # Join the result with aquatroll data
 final_df = combined_df.join_asof(
