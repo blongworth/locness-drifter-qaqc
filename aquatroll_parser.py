@@ -405,10 +405,10 @@ if __name__ == "__main__":
                 print(f"Parsed {len(df)} total records from folder")
                 print(f"Columns: {list(df.columns)}")
                 print(f"Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
-                df.to_csv("combined_aquatroll_data.csv", index=False)
-                print("Combined data written to combined_aquatroll_data.csv")
-                df.to_parquet("combined_aquatroll_data.parquet", index=False)
-                print("Combined data written to combined_aquatroll_data.parquet")
+                df.to_csv("output/loc02_drifter_aquatroll.csv", index=False)
+                print("Combined data written to output/loc02_drifter_aquatroll.csv")
+                df.to_parquet("output/loc02_drifter_aquatroll.parquet", index=False)
+                print("Combined data written to output/loc02_drifter_aquatroll.parquet")
             else:
                 # Parse single file
                 result = parse_aquatroll_file(file_path)

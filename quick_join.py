@@ -2,9 +2,9 @@ import polars as pl
 from pathlib import Path
 
 # Define file paths
-gpx_file = "parsed_gpx_data.parquet"
-fluoro_file = "combined_fluorometer_data.parquet"
-troll_file = "combined_aquatroll_data.parquet"
+gpx_file = "output/loc02_drifter_positions.parquet"
+fluoro_file = "output/loc02_drifter_pme.parquet"
+troll_file = "output/loc02_drifter_aquatroll.parquet"
 
 # Read and sort the dataframes
 # Sorting is required for asof joins
@@ -12,9 +12,20 @@ gpx_df = pl.read_parquet(gpx_file).sort("drifter", "timestamp")
 fluoro_df = pl.read_parquet(fluoro_file).sort("drifter", "sensor_position", "timestamp")
 troll_df = pl.read_parquet(troll_file).sort("drifter", "timestamp")
 
-# Join gpx and fluorometer data
-combined_df = gpx_df.join_asof(
-    fluoro_df, on="timestamp", by="drifter", tolerance="60s"
+# Get unique combinations of drifter and sensor_position
+unique_sensors = fluoro_df.select("drifter", "sensor_position").unique()
+
+# Cross join GPS data with unique sensor combinations to create all combinations
+gpx_expanded = gpx_df.join(unique_sensors, on="drifter", how="inner")
+
+print(fluoro_df.columns)
+
+# Now join with fluorometer data using asof join
+combined_df = gpx_expanded.sort("drifter", "sensor_position", "timestamp").join_asof(
+    fluoro_df, 
+    on="timestamp", 
+    by=["drifter", "sensor_position"], 
+    tolerance="60s"
 )
 
 # Join the result with aquatroll data
@@ -72,5 +83,5 @@ flagged_df = add_drifter_deployed_flag(final_df, "data/loc02_drifter_deployments
 print(flagged_df)
 
 # Optionally, save the result to a new parquet file
-flagged_df.write_parquet("loc02_drifter_combined.parquet")
-flagged_df.write_csv("loc02_drifter_combined.csv")
+flagged_df.write_parquet("output/loc02_drifter_combined.parquet")
+flagged_df.write_csv("output/loc02_drifter_combined.csv")

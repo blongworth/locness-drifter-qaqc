@@ -171,10 +171,10 @@ if __name__ == "__main__":
         print(f"Total tracks: {summary['total_tracks']}")
         print(f"Total points: {summary['total_points']}")
         
-        df.to_csv("parsed_gpx_data.csv", index=False)
-        print("Parsed data written to parsed_gpx_data.csv")
-        df.to_parquet("parsed_gpx_data.parquet", index=False)
-        print("Parsed data written to parsed_gpx_data.parquet")
+        df.to_csv("output/loc02_drifter_positions.csv", index=False)
+        print("Parsed data written to output/loc02_drifter_positions.csv")
+        df.to_parquet("output/loc02_drifter_positions.parquet", index=False)
+        print("Parsed data written to output/loc02_drifter_positions.parquet")
 
     except Exception as e:
         print(f"Error: {e}")

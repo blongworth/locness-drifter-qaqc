@@ -395,10 +395,10 @@ if __name__ == "__main__":
                 f"Time range: {summary['time_range'].get('start_timestamp')} to {summary['time_range'].get('end_timestamp')}"
             )
 
-        df.to_csv("combined_fluorometer_data.csv", index=False)
-        print("Combined data written to combined_fluorometer_data.csv")
-        df.to_parquet("combined_fluorometer_data.parquet", index=False)
-        print("Combined data written to combined_fluorometer_data.parquet")
+        df.to_csv("output/loc02_drifter_pme.csv", index=False)
+        print("Combined data written to output/loc02_drifter_pme.csv")
+        df.to_parquet("output/loc02_drifter_pme.parquet", index=False)
+        print("Combined data written to output/loc02_drifter_pme.parquet")
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)
