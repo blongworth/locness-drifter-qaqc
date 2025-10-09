@@ -388,34 +388,81 @@ def add_drifter_number(df: pd.DataFrame, metadata_file: str | Path) -> pd.DataFr
 
     return df
 
-if __name__ == "__main__":
+def add_flags(df: pd.DataFrame, flag_ranges: dict[str, list[float]]) -> pd.DataFrame:
+    """
+    Add flag columns to the DataFrame based on specified value ranges.
+
+    For each field in the flag_ranges dictionary, a new column named
+    '<field>_flag' is added. The flag is set to 2 if the value is
+    within the [min, max] range (inclusive), and 4 otherwise.
+
+    Args:
+        df: pandas DataFrame to add flags to.
+        flag_ranges: Dictionary where keys are column names and values are
+                     lists containing [min_value, max_value].
+
+    Returns:
+        DataFrame with added flag columns.
+    """
+    df_copy = df.copy()
+    for field, value_range in flag_ranges.items():
+        if field not in df_copy.columns:
+            logger.warning(
+                f"Field '{field}' not found in DataFrame. Skipping flagging."
+            )
+            continue
+
+        min_val, max_val = value_range
+        flag_col = f"{field}_flag"
+
+        # Default flag is 4 (bad/outside range)
+        df_copy[flag_col] = 4
+
+        # Set flag to 2 for values within the specified range (inclusive)
+        in_range_condition = (df_copy[field] >= min_val) & (df_copy[field] <= max_val)
+        df_copy.loc[in_range_condition, flag_col] = 2
+        
+        # if the original data had NaNs, keep the flag as NaN
+        df_copy.loc[df_copy[field].isna(), flag_col] = pd.NA
+
+        # Ensure flag is integer type, allowing for NaNs if original data had them
+        df_copy[flag_col] = df_copy[flag_col].astype("Int8")
+
+    return df_copy
+
+def main():
     # Setup logging for standalone execution
     setup_logging()
 
     # Example usage
     import sys
+    
+    # flag dictionary for sensor fields
+    flag_dict = {
+        "salinity": [30, 35],  # PSU
+        "temperature": [19, 23],  # degrees Celsius
+        "rdo_concentration": [7, 9],  # mg/L
+        "ph": [8, 9],  # pH units
+    }
 
     if len(sys.argv) > 1:
         file_path = sys.argv[1]
         try:
-            if Path(file_path).is_dir():
-                # Parse folder
-                df = parse_aquatroll_folder(file_path)
-                df = add_drifter_number(df, "data/drifter_metadata.csv")
-                print(f"Parsed {len(df)} total records from folder")
-                print(f"Columns: {list(df.columns)}")
-                print(f"Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
-                df.to_csv("output/loc02_drifter_aquatroll.csv", index=False)
-                print("Combined data written to output/loc02_drifter_aquatroll.csv")
-                df.to_parquet("output/loc02_drifter_aquatroll.parquet", index=False)
-                print("Combined data written to output/loc02_drifter_aquatroll.parquet")
-            else:
-                # Parse single file
-                result = parse_aquatroll_file(file_path)
-                print(f"Metadata: {result['metadata']}")
-                print(f"Data shape: {result['data'].shape}")
-                print(f"Columns: {list(result['data'].columns)}")
+            # Parse folder
+            df = parse_aquatroll_folder(file_path)
+            df = add_drifter_number(df, "data/drifter_metadata.csv")
+            df = add_flags(df, flag_dict)
+            print(f"Parsed {len(df)} total records from folder")
+            print(f"Columns: {list(df.columns)}")
+            print(f"Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
+            df.to_csv("output/loc02_drifter_aquatroll.csv", index=False)
+            print("Combined data written to output/loc02_drifter_aquatroll.csv")
+            df.to_parquet("output/loc02_drifter_aquatroll.parquet", index=False)
+            print("Combined data written to output/loc02_drifter_aquatroll.parquet")
         except Exception as e:
             print(f"Error: {e}")
     else:
         print("Usage: python aquatroll_parser.py <file_or_folder_path>")
+
+if __name__ == "__main__":
+    main()

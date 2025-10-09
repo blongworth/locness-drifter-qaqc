@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.16.5"
-app = marimo.App()
+app = marimo.App(width="full")
 
 
 @app.cell
@@ -11,6 +11,7 @@ def _():
     import plotly.express as px
     import numpy as np
     import pandas as pd
+
     return mo, pl, px
 
 
@@ -18,7 +19,7 @@ def _():
 def _(pl):
     # Load the data using polars
     df = pl.read_parquet("output/loc02_drifter_combined.parquet")
-    
+
     #.filter(pl.col("drifter").is_not_null())
     df
     return (df,)
@@ -78,7 +79,7 @@ def _(df, mo):
     )
 
     drifter_select, deployed
-    return deployed, drifter_select
+    return deployed, drifter_ids, drifter_select
 
 
 @app.cell
@@ -162,6 +163,83 @@ def _(df_filtered, px, selected_drifter):
     )
 
     _fig_time_series
+    return
+
+
+@app.cell(hide_code=True)
+def _(df, drifter_ids, mo):
+    # Get plottable columns (numeric columns excluding identifiers)
+    _plottable_cols = df.columns
+
+    # UI for selecting drifter and parameter
+    drifter_selector_param = mo.ui.dropdown(
+        options=[str(d) for d in drifter_ids],
+        value=str(drifter_ids[0]),
+        label="Drifter"
+    )
+
+    parameter_selector = mo.ui.dropdown(
+        options=_plottable_cols,
+        value='sensor_ppb_rwt',
+        label="Parameter"
+    )
+
+    flag_selector = mo.ui.checkbox(
+        label="flag ok",
+        value=False  # default unchecked; set True if you want default deployed
+    )
+
+    # Group UI elements
+    _controls = mo.hstack([drifter_selector_param, parameter_selector, flag_selector], justify='start')
+    _controls
+    return drifter_selector_param, flag_selector, parameter_selector
+
+
+@app.cell
+def _(
+    deployed,
+    df,
+    drifter_selector_param,
+    flag_selector,
+    parameter_selector,
+    pl,
+    px,
+):
+    # Filter data based on selections
+    _selected_drifter_param = int(drifter_selector_param.value)
+    _selected_parameter = parameter_selector.value
+
+    _df_filtered_param = df.filter(
+        (pl.col("drifter") == _selected_drifter_param) &
+        (pl.col("deployed") if deployed.value else pl.lit(True))
+    )
+
+    if flag_selector.value:
+        _df_filtered_param = _df_filtered_param.filter(
+        pl.all_horizontal([
+            ((pl.col(c) == 2) | pl.col(c).is_null())
+            for c in _df_filtered_param.columns
+            if c.endswith("_flag")
+        ])
+
+        )
+
+    # Create the time series plot
+    _fig_param_ts = px.line(
+        _df_filtered_param.to_pandas(),
+        x="timestamp",
+        y=_selected_parameter,
+        title=f"{_selected_parameter.replace('_', ' ').title()} vs. Time for Drifter {_selected_drifter_param}",
+        labels={
+            "timestamp": "Time",
+            _selected_parameter: _selected_parameter.replace('_', ' ').title(),
+        },
+        color="sensor_position",
+        hover_data={"sensor_position": True},
+    )
+
+    # Display controls and the plot
+    _fig_param_ts
     return
 
 

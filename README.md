@@ -20,7 +20,7 @@ Each parser reads the raw data files, processes them, and combines them into a u
 
 - **`quick_join.py`** - Joins the parsed sensor datasets together based on timestamps
 
-The integration uses a **left join** on the position data, meaning that sensor data (Aquatroll and fluorometer) is only included in the final dataset where corresponding position data is available. This ensures all output rows have valid GPS coordinates.
+The integration uses a **left join** on the position data, meaning that sensor data (Aquatroll and fluorometer) is only included in the final dataset where corresponding position data is available. This ensures all output rows have valid GPS coordinates. Commented code for a reverse join that will include all fluorometer records is also provided for reference.
 
 ### 3. Metadata Files
 
