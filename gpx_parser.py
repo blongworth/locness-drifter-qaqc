@@ -63,6 +63,7 @@ def parse_gpx_to_dataframe(filename: str | Path) -> pd.DataFrame:
                             "timestamp": point.time,
                             "latitude": point.latitude,
                             "longitude": point.longitude,
+                            "elevation": point.elevation,
                         }
                     )
 
@@ -149,6 +150,34 @@ def get_gpx_summary(filename: str | Path) -> dict[str, Any]:
         logger.error(f"Error getting GPX summary for {file_path}: {e}")
         raise
 
+def add_position_flag(
+    df: pd.DataFrame, min_elevation: float = -1000, max_elevation: float = 1000
+) -> pd.DataFrame:
+    """
+    Adds a 'position_flag' column to the DataFrame based on elevation.
+
+    The flag is set to 2 if the 'elevation' is within the specified range (inclusive),
+    or if 'elevation' is NaN. Otherwise, the flag is set to 4.
+
+    Args:
+        df: The input pandas DataFrame, must contain an 'elevation' column.
+        min_elevation: The minimum valid elevation. Defaults to -1000.
+        max_elevation: The maximum valid elevation. Defaults to 1000.
+
+    Returns:
+        The DataFrame with the 'position_flag' column added.
+    """
+    # Condition for valid elevation: between min_elevation and max_elevation, or NaN
+    condition = (
+        df["elevation"].between(min_elevation, max_elevation) | df["elevation"].isna()
+    )
+
+    # Set flag to 2 where condition is True, 4 otherwise
+    df["position_flag"] = 4
+    df.loc[condition, "position_flag"] = 2
+    df["position_flag"] = df["position_flag"].astype("Int8")
+
+    return df
 
 if __name__ == "__main__":
     # Example usage
@@ -160,6 +189,7 @@ if __name__ == "__main__":
 
     try:
         df = parse_gpx_to_dataframe(sys.argv[1])
+        df = add_position_flag(df)
         print(f"Parsed {len(df)} points:")
         print(df.head())
         print("\nDataFrame info:")
