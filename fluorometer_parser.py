@@ -367,9 +367,69 @@ def add_drifter_number(df: pd.DataFrame, metadata_file: str | Path) -> pd.DataFr
 
     return df
 
+
+def add_rho_flag(df: pd.DataFrame, flag_periods_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Add a rho_flag column to the DataFrame based on flagging periods and data conditions.
+    
+    Args:
+        df: DataFrame with fluorometer data including 'drifter', 'timestamp', and 'sensor_ppb_rwt' columns
+        flag_periods_df: DataFrame with columns 'drifter', 'start', 'end' representing time periods
+                        where rho_flag should be set to 4
+    
+    Returns:
+        DataFrame with added 'rho_flag' column
+        
+    Raises:
+        ValueError: If required columns are missing
+    """
+    required_cols = ['drifter', 'timestamp', 'sensor_ppb_rwt']
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        raise ValueError(f"DataFrame missing required columns: {missing_cols}")
+    
+    required_flag_cols = ['drifter', 'start', 'end']
+    missing_flag_cols = [col for col in required_flag_cols if col not in flag_periods_df.columns]
+    if missing_flag_cols:
+        raise ValueError(f"Flag periods DataFrame missing required columns: {missing_flag_cols}")
+    
+    # Initialize rho_flag with default value of 2
+    df = df.copy()
+    df['rho_flag'] = 2
+    
+    # Set flag to NaN where sensor_ppb_rwt is NaN
+    df.loc[df['sensor_ppb_rwt'].isna(), 'rho_flag'] = pd.NA
+    
+    # Convert start/end times to datetime if they aren't already
+    flag_periods_df = flag_periods_df.copy()
+    flag_periods_df['start'] = pd.to_datetime(flag_periods_df['start'])
+    flag_periods_df['end'] = pd.to_datetime(flag_periods_df['end'])
+    
+    # Set flag to 4 for specified time periods by drifter
+    for _, flag_row in flag_periods_df.iterrows():
+        mask = (
+            (df['drifter'] == flag_row['drifter']) &
+            (df['timestamp'] >= flag_row['start']) &
+            (df['timestamp'] <= flag_row['end']) 
+        )
+        df.loc[mask, 'rho_flag'] = 4
+    
+    # Set flag to NaN where sensor_ppb_rwt is NaN (override any previous settings)
+    df.loc[df['sensor_ppb_rwt'].isna(), 'rho_flag'] = pd.NA
+    
+    return df
+
+
 if __name__ == "__main__":
     # Example usage
     import sys
+
+    # Create a DataFrame with flagging periods
+    rho_flag_periods = pd.DataFrame({
+        'drifter': [4],
+        'start': [pd.to_datetime('2025-08-15 11:30', utc=True)],
+        'end': [pd.to_datetime('2025-08-18 00:00', utc=True)]
+    })
 
     if len(sys.argv) != 2:
         print("Usage: python fluorometer_parser.py <folder_path>")
@@ -378,6 +438,9 @@ if __name__ == "__main__":
     try:
         df = parse_fluorometer_folder(sys.argv[1])
         df = add_drifter_number(df, "data/drifter_metadata.csv")
+        print("\nColumn types:")
+        print(df.dtypes)
+        df = add_rho_flag(df, rho_flag_periods)
         print(f"Parsed {len(df)} records from fluorometer data files:")
         print(df.head())
         print("\nDataFrame info:")
