@@ -73,6 +73,209 @@ def parse_aquatroll_file(file_path: str | Path) -> dict[str, Any]:
         raise ValueError(f"Failed to parse AquaTROLL file: {e}")
 
 
+def parse_aquatroll_csv_file(file_path: str | Path) -> dict[str, Any]:
+    """
+    Parse a single AquaTROLL CSV file and return metadata and sensor data.
+
+    Args:
+        file_path: Path to the AquaTROLL CSV file
+
+    Returns:
+        Dictionary containing:
+        - 'metadata': Dict with basic file metadata
+        - 'data': pandas DataFrame with sensor readings
+        - 'columns': Dict mapping column names to their units (extracted from headers)
+
+    Raises:
+        FileNotFoundError: If the file doesn't exist
+        ValueError: If the file cannot be parsed
+    """
+    file_path = Path(file_path)
+
+    if not file_path.exists():
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    logger.info(f"Parsing AquaTROLL CSV file: {file_path.name}")
+
+    try:
+        # Read the CSV file, trying different encodings
+        encodings_to_try = ['utf-8', 'latin-1', 'windows-1252', 'cp1252']
+        df = None
+        
+        for encoding in encodings_to_try:
+            try:
+                # First, try to read the file to detect the structure
+                with open(file_path, 'r', encoding=encoding) as f:
+                    lines = f.readlines()
+                
+                # Find the header line (contains column names)
+                header_line_idx = None
+                for i, line in enumerate(lines):
+                    if 'Date Time' in line and ',' in line:
+                        header_line_idx = i
+                        break
+                
+                if header_line_idx is None:
+                    # Try standard CSV reading
+                    df = pd.read_csv(file_path, encoding=encoding)
+                else:
+                    # Skip the metadata lines and read from the header
+                    df = pd.read_csv(file_path, encoding=encoding, skiprows=header_line_idx)
+                
+                logger.info(f"Successfully read CSV file with {encoding} encoding")
+                break
+            except (UnicodeDecodeError, pd.errors.ParserError):
+                continue
+        
+        if df is None:
+            raise ValueError("Could not read CSV file with any supported encoding")
+        
+        if df.empty:
+            raise ValueError("CSV file is empty")
+
+        # Extract metadata from CSV header section (if available)
+        metadata = {
+            "filename": file_path.name,
+            "file_type": "csv",
+            "num_records": len(df)
+        }
+        
+        # Try to extract device info from the header lines we skipped
+        try:
+            with open(file_path, 'r', encoding=encodings_to_try[0]) as f:
+                header_lines = []
+                for line in f:
+                    if 'Date Time' in line:
+                        break
+                    header_lines.append(line.strip())
+                
+                # Parse metadata from header lines
+                for line in header_lines:
+                    if '=' in line:
+                        key, value = line.split('=', 1)
+                        key = key.strip().lower().replace(' ', '_')
+                        value = value.strip()
+                        
+                        if key == 'device_s/n':
+                            metadata['device_serial_number'] = value
+                        elif key == 'device_model':
+                            metadata['device_model'] = value
+                        elif key == 'device_firmware':
+                            metadata['device_firmware'] = value
+        except Exception:
+            # If metadata extraction fails, continue without it
+            pass
+
+        # Parse column information and clean up column names
+        column_info = {}
+        clean_columns = {}
+        
+        # Define the exact column mappings for ISI CSV format
+        isi_column_mappings = {
+            'Date Time': 'timestamp',
+            '1: Actual Conductivity': 'actual_conductivity',
+            '2: Specific Conductivity': 'specific_conductivity', 
+            '3: Salinity': 'salinity',
+            '4: Resistivity': 'resistivity',
+            '5: Water Density': 'density',
+            '6: Total Dissolved Solids': 'total_dissolved_solids',
+            '7: Dissolved Oxygen': 'rdo_concentration',  # mg/L version
+            '8: Dissolved Oxygen': 'rdo_saturation',     # %sat version
+            '9: Partial Pressure Oxygen': 'oxygen_partial_pressure',
+            '10: Turbidity': 'turbidity', 
+            '11: pH': 'ph',
+            '12: pH mV': 'ph_mv',
+            '13: ORP mV': 'orp',
+            '14: Temperature': 'temperature',
+            '15: External': 'external_voltage',
+            '16: Battery': 'battery_capacity',
+            '17: Barometer': 'barometric_pressure',
+            '18: Pressure': 'pressure',
+            '19: Depth': 'depth'
+        }
+
+        for col in df.columns:
+            # Extract units from column names
+            unit_match = re.search(r'\(([^)]+)\)', col)
+            unit = unit_match.group(1) if unit_match else ""
+            
+            # Skip sensor serial number and data quality columns
+            if 'sensor s/n' in col.lower() or 'data quality' in col.lower():
+                continue
+            
+            # Clean column name by removing units and extra info
+            clean_col = col
+            # Remove units in parentheses and extra identifiers
+            clean_col = re.sub(r'\s*\([^)]*\)', '', clean_col)
+            # Remove special characters like µ, °, etc.
+            clean_col = re.sub(r'[µ°³]', '', clean_col)
+            clean_col = clean_col.strip()
+            
+            # Find matching standard column name
+            clean_name = None
+            if clean_col == 'Date Time':
+                clean_name = 'timestamp'
+            else:
+                # Look for matches in our mapping
+                for pattern, standard_name in isi_column_mappings.items():
+                    if pattern in clean_col:
+                        # Special handling for dissolved oxygen (distinguish mg/L vs %sat)
+                        if 'Dissolved Oxygen' in clean_col:
+                            if '%sat' in col or 'sat' in col.lower():
+                                clean_name = 'rdo_saturation'
+                            else:
+                                clean_name = 'rdo_concentration'
+                        else:
+                            clean_name = standard_name
+                        break
+            
+            # If we found a matching standard column name, add it
+            if clean_name:
+                clean_columns[col] = clean_name
+                
+                # Store column info
+                column_info[clean_name] = {
+                    "original_name": col,
+                    "unit_type": unit,
+                    "parameter_type": clean_name
+                }
+
+        # Rename columns and keep only the ones we want
+        df = df.rename(columns=clean_columns)
+        
+        # Keep only the columns that were successfully mapped to standard names
+        columns_to_keep = list(clean_columns.values())
+        df = df[columns_to_keep]
+
+        # Convert data types
+        for col in df.columns:
+            if col == "timestamp":
+                # Convert timestamp column
+                try:
+                    df[col] = pd.to_datetime(df[col])
+                except Exception as e:
+                    logger.warning(f"Could not convert timestamp column: {e}")
+            else:
+                # Try to convert to numeric
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        # Extract additional metadata if timestamp is available
+        if "timestamp" in df.columns and not df["timestamp"].isna().all():
+            metadata.update({
+                "start_time": df["timestamp"].min(),
+                "end_time": df["timestamp"].max(),
+                "duration_hours": (df["timestamp"].max() - df["timestamp"].min()).total_seconds() / 3600
+            })
+
+        logger.info(f"Successfully parsed {len(df)} data records from CSV")
+
+        return {"metadata": metadata, "data": df, "columns": column_info}
+
+    except Exception as e:
+        logger.error(f"Error parsing CSV file {file_path}: {e}")
+        raise ValueError(f"Failed to parse AquaTROLL CSV file: {e}")
+
+
 def parse_aquatroll_folder(folder_path: str | Path) -> pd.DataFrame:
     """
     Parse all AquaTROLL HTML files in a folder and return combined data.
@@ -450,6 +653,34 @@ def main():
         try:
             # Parse folder
             df = parse_aquatroll_folder(file_path)
+            # Also parse the CSV file and append to the combined data
+            csv_file = "data/AT600_Drifter04_LOC02.CSV"
+            try:
+                csv_result = parse_aquatroll_csv_file(csv_file)
+                csv_df = csv_result["data"].copy()
+                
+                # Add source file information
+                csv_df["source_file"] = Path(csv_file).name
+
+                # Add metadata as columns if available
+                csv_metadata = csv_result["metadata"]
+                if "location_name" in csv_metadata:
+                    csv_df["location"] = csv_metadata["location_name"]
+                if "device_serial_number" in csv_metadata:
+                    csv_df["device_sn"] = csv_metadata["device_serial_number"]
+                if "log_name" in csv_metadata:
+                    csv_df["log_name"] = csv_metadata["log_name"]
+                
+                # Convert timestamp to UTC if it exists
+                if "timestamp" in csv_df.columns:
+                    csv_df["timestamp"] = pd.to_datetime(csv_df["timestamp"], utc=True)
+                
+                # Append to the combined dataframe
+                df = pd.concat([df, csv_df], ignore_index=True)
+                print(f"Appended {len(csv_df)} records from CSV file")
+                
+            except Exception as e:
+                logger.warning(f"Could not parse CSV file {csv_file}: {e}")
             df = add_drifter_number(df, "data/drifter_metadata.csv")
             df = add_flags(df, flag_dict)
             print(f"Parsed {len(df)} total records from folder")
