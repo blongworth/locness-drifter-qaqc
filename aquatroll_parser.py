@@ -141,30 +141,42 @@ def parse_aquatroll_csv_file(file_path: str | Path) -> dict[str, Any]:
         }
         
         # Try to extract device info from the header lines we skipped
-        try:
-            with open(file_path, 'r', encoding=encodings_to_try[0]) as f:
-                header_lines = []
-                for line in f:
-                    if 'Date Time' in line:
-                        break
-                    header_lines.append(line.strip())
-                
-                # Parse metadata from header lines
-                for line in header_lines:
-                    if '=' in line:
-                        key, value = line.split('=', 1)
-                        key = key.strip().lower().replace(' ', '_')
-                        value = value.strip()
-                        
-                        if key == 'device_s/n':
-                            metadata['device_serial_number'] = value
-                        elif key == 'device_model':
-                            metadata['device_model'] = value
-                        elif key == 'device_firmware':
-                            metadata['device_firmware'] = value
-        except Exception:
-            # If metadata extraction fails, continue without it
-            pass
+        # Use the same encoding that worked for reading the CSV
+        working_encoding = None
+        for encoding in encodings_to_try:
+            try:
+                with open(file_path, 'r', encoding=encoding) as f:
+                    f.readline()  # Test if we can read
+                    working_encoding = encoding
+                    break
+            except UnicodeDecodeError:
+                continue
+        
+        if working_encoding:
+            try:
+                with open(file_path, 'r', encoding=working_encoding) as f:
+                    header_lines = []
+                    for line in f:
+                        if 'Date Time' in line:
+                            break
+                        header_lines.append(line.strip())
+                    
+                    # Parse metadata from header lines
+                    for line in header_lines:
+                        if '=' in line:
+                            key, value = line.split('=', 1)
+                            key = key.strip().lower().replace(' ', '_').replace('/', '_')
+                            value = value.strip()
+                            
+                            if key == 'device_s_n':
+                                metadata['device_serial_number'] = value
+                            elif key == 'device_model':
+                                metadata['device_model'] = value
+                            elif key == 'device_firmware':
+                                metadata['device_firmware'] = value
+            except Exception:
+                # If metadata extraction fails, continue without it
+                pass
 
         # Parse column information and clean up column names
         column_info = {}
@@ -258,6 +270,10 @@ def parse_aquatroll_csv_file(file_path: str | Path) -> dict[str, Any]:
             else:
                 # Try to convert to numeric
                 df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        # Add device serial number to DataFrame if we extracted it from metadata
+        if "device_serial_number" in metadata:
+            df["device_sn"] = metadata["device_serial_number"]
 
         # Extract additional metadata if timestamp is available
         if "timestamp" in df.columns and not df["timestamp"].isna().all():
