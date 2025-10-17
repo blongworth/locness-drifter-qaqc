@@ -179,6 +179,47 @@ def add_position_flag(
 
     return df
 
+
+def apply_flags_from_file(df: pd.DataFrame, flag_file: str | Path) -> pd.DataFrame:
+    """
+    Apply position flags to the DataFrame based on drifter number and time range from a flag file.
+    
+    The flag file should be a CSV with columns: drifter, start_time, end_time, position_flag
+    
+    Args:
+        df: The input pandas DataFrame with drifter position data
+        flag_file: Path to the CSV file containing flag definitions
+        
+    Returns:
+        The DataFrame with position_flag column updated based on the flag file
+    """
+    flag_path = Path(flag_file)
+    
+    if not flag_path.exists():
+        raise FileNotFoundError(f"Flag file not found: {flag_path}")
+    
+    logger.info(f"Applying flags from: {flag_path}")
+    
+    # Read the flag file
+    flags_df = pd.read_csv(flag_path)
+    
+    # Convert time columns to datetime
+    flags_df['start_time'] = pd.to_datetime(flags_df['start_time'], utc=True)
+    flags_df['end_time'] = pd.to_datetime(flags_df['end_time'], utc=True)
+    
+    # Apply flags for each row in the flag file
+    for _, flag_row in flags_df.iterrows():
+        mask = (
+            (df['drifter'] == flag_row['drifter']) &
+            (df['timestamp'] >= flag_row['start_time']) &
+            (df['timestamp'] <= flag_row['end_time'])
+        )
+        df.loc[mask, 'position_flag'] = flag_row['position_flag']
+    
+    logger.info(f"Successfully applied flags from {flag_path}")
+    return df
+
+
 if __name__ == "__main__":
     # Example usage
     import sys
@@ -190,6 +231,8 @@ if __name__ == "__main__":
     try:
         df = parse_gpx_to_dataframe(sys.argv[1])
         df = add_position_flag(df)
+        df = apply_flags_from_file(df, "data/loc02_drifter_pos_flags.csv")
+
         print(f"Parsed {len(df)} points:")
         print(df.head())
         print("\nDataFrame info:")

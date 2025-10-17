@@ -11,7 +11,6 @@ def _():
     import plotly.express as px
     import numpy as np
     import pandas as pd
-
     return mo, pl, px
 
 
@@ -113,7 +112,7 @@ def _(df_filtered, px, selected_drifter):
         df_path,
         lat="latitude",
         lon="longitude",
-        color="sensor_ppb_rwt",
+        color="position_flag",
         title=f"Drifter {selected_drifter}",
         mapbox_style="open-street-map",
         zoom=10,
@@ -144,6 +143,13 @@ def _(df_filtered, px, selected_drifter):
     scatter_fig.data = tuple(list(scatter_fig.data)[-1:] + list(scatter_fig.data)[:-1])
 
     scatter_fig
+    return
+
+
+@app.cell
+def _(pl):
+    pos_df = pl.read_parquet("output/loc02_drifter_positions.parquet")
+    pos_df
     return
 
 
