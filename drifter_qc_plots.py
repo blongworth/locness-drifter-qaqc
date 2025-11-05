@@ -25,6 +25,18 @@ def _(pl):
 
 
 @app.cell
+def _(df, pl):
+    duplicate_rows = df.select(
+        ["drifter", "timestamp", "latitude", "longitude", "sensor_position"]
+    ).filter(
+        pl.struct(["drifter", "timestamp", "latitude", "longitude", "sensor_position"]).is_duplicated()
+    ).sort("drifter", "timestamp")
+
+    duplicate_rows
+    return
+
+
+@app.cell
 def _(df, px):
     # Create a scatter mapbox plot
     # Note: plotly.express works seamlessly with pandas, so we convert the polars DataFrame
@@ -155,7 +167,7 @@ def _(pl):
 
 @app.cell
 def _(df_filtered, px, selected_drifter):
-    _fig_time_series = px.line(
+    _fig_time_series = px.scatter(
         df_filtered.to_pandas(),
         x="timestamp",
         y="sensor_ppb_rwt",
@@ -247,6 +259,19 @@ def _(
 
     # Display controls and the plot
     _fig_param_ts
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""Checking GPS records""")
+    return
+
+
+@app.cell
+def _(pl):
+    gps_df = pl.read_parquet("output/loc02_drifter_positions.parquet")
+    gps_df
     return
 
 

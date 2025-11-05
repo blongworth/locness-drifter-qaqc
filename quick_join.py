@@ -19,20 +19,20 @@ unique_sensors = fluoro_df.select("drifter", "sensor_position").unique()
 gpx_expanded = gpx_df.join(unique_sensors, on="drifter", how="inner").sort("drifter", "sensor_position", "timestamp")
 
 # Now join with fluorometer data using asof join
-combined_df = gpx_expanded.join_asof(
-    fluoro_df, 
-    on="timestamp", 
-    by=["drifter", "sensor_position"], 
-    tolerance="60s"
-)
-
-# Use this join to ensure all fluorometer records are kept, even if no GPS match is found
-# combined_df = fluoro_df.join_asof(
-#     gpx_expanded, 
+# combined_df = gpx_expanded.join_asof(
+#     fluoro_df, 
 #     on="timestamp", 
 #     by=["drifter", "sensor_position"], 
 #     tolerance="60s"
 # )
+
+# Use this join to ensure all fluorometer records are kept, even if no GPS match is found
+combined_df = fluoro_df.join_asof(
+    gpx_expanded, 
+    on="timestamp", 
+    by=["drifter", "sensor_position"], 
+    tolerance="60s"
+)
 
 # Join the result with aquatroll data
 final_df = combined_df.join_asof(
